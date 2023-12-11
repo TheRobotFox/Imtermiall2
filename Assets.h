@@ -1,71 +1,100 @@
-#include <cstddef>
-#include <memory>
-namespace Assets {
-    class Asset{
-        public:
-        virtual std::size_t get_type() = 0;
-    };
-}
-
 #include <map>
 #include <string>
 #include <unordered_map>
 #include <memory>
-namespace Assets{
-    // template<typename... AT> class _AssetManager;
+#include <cstddef>
+#include <functional>
 
-  template<typename T, typename... Tail> class _AssetHelper : public _AssetHelper<T>, public _AssetHelper<Tail...> {};
+namespace Assets {
 
-    template<typename T> class _AssetHelper<T> {
-      template<typename...>
-        friend class _AssetManager;
-        std::unordered_map<std::string, T> data;
+    class Asset;
+
+    inline std::size_t type_id_counter;
+    template<typename T> inline std::size_t type_id = type_id_counter++;
+
+    template<typename T>
+    struct _AssetInfo{
+        T asset;
+        std::size_t registered = 1;
+        std::size_t type = type_id<T>;
     };
-    template<typename... AT> class _AssetManager : public _AssetHelper<AT...> {
+
+    template<typename... AT> class _AssetManager {
+
+           template<typename T>
+            static std::unordered_map<std::string, _AssetInfo<T>> data;
+
     public:
         template<typename T>
-        std::shared_ptr<T> get_asset(const std::string id){
-            if(_AssetHelper<T>::data.contains(id))
-                return std::make_shared(_AssetHelper<T>::data[id]);
+        static std::shared_ptr<T> get_asset(const std::string id){
+            if(data<T>.contains(id))
+                return std::make_shared(data<T>[id]);
             else
               return nullptr;
         }
 
-        template<typename T>
-        bool load_asset(std::string &&id, const T &&asset){
-            // if(contains(id)) return false;
-            _AssetHelper<T>::data[id] = asset;
-            return true;
+    template<typename T>
+    static bool register_asset(std::string &&id, T &&asset){
+        if(contains(id)) {
+            if(data<T>[id].asset != asset){
+                return false;
+            }
+            data<T>[id].registered++;
+        } else {
+            data<T>[id] = _AssetInfo {.asset = asset};
         }
-        bool contains(std::string id)
-        {
-            return _contains<AT...>(id);
+        return true;
+    }
+
+    static bool unregister_asset(std::string &&id){
+        bool ret = false;
+        ([&]{
+            if(data<AT>.contains(id)){
+                if(!--data<AT>[id].registered){
+                    data<AT>.erase(id);
+                }
+                ret = true;
+            }
+        }(), ...);
+        return false;
+    }
+
+    public:
+        template<typename T>
+        static bool load_asset(std::string &&id, const T &&asset){
+            if(!contains(id)) return false;
+            return (data<T>[id].asset.loaded = data<T>[id].asset.load());
         }
 
-    private:
-        template<typename T1, typename T2, typename... Tail>
-        bool _contains(std::string id)
+    public:
+        static bool contains(std::string id)
         {
-            if(Assets::_AssetHelper<T1>::data.contains(id)) return true;
-            return _contains<T2, Tail...>(id);
-        }
-        template<typename T> bool _contains(std::string id)
-        {
-            if(Assets::_AssetHelper<T>::data.contains(id)) return true;
-            else return false;
+            return (data<AT>.contains(id) || ...);
         }
 
     };
-    #define REGISTER_MANAGER(...) typedef Assets::_AssetManager<__VA_ARGS__> AssetManager;
-}
+
+    template<typename... AT>
+    template<typename T>
+      std::unordered_map<std::string, _AssetInfo<T>> _AssetManager<AT...>::data;
+
+#define REGISTER_MANAGER(...) typedef Assets::_AssetManager<__VA_ARGS__> AssetManager;
+} // Namespace Assets
 
 namespace Assets {
-    inline std::size_t type_id_counter = 0;
-    template<typename T> inline std::size_t type_id = type_id_counter++;
-    template<typename T> class AssetId : public Asset{
-        public:
-        std::size_t get_type(){return type_id<T>;}
-    };
+    class Asset{
+        template<typename...>
+        friend class _AssetManager;
 
-    #define IMPL_ASSET(NAME) class NAME : public Assets::AssetId<NAME>
+        std::size_t registerd = 0;
+        bool loaded=false;
+
+        protected:
+        virtual bool load() = 0;
+        virtual void unload() = 0;
+        virtual bool operator!=(const Asset &rhs) = 0;
+
+        public:
+        virtual std::size_t get_type() = 0;
+    };
 }

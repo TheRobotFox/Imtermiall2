@@ -9,81 +9,135 @@
 :END:
 An Asset is a generic type which hold every kind of Asset (Textures, Sounds, levels, scripts).
 
-It has a virtual function, which returns the Asset type.
-#+name: Asset
-#+begin_src cpp
-#include <cstddef>
-#include <memory>
-namespace Assets {
-    class Asset{
-        public:
-        virtual std::size_t get_type() = 0;
-    };
-}
-#+end_src
-
 
 All Assets get Stored in the =AssetManager=
-
-
 ** Manager
 The Manager allows to iterate over all loaded assets, free them, display them ans so on.
-It stores the different Assets in inherited classes for each type
+It has a static Member Hashmap for each Asset Type.
 
-#+name: AssetManager
+Primarily for future GPU support, but also allows pre registering assets, so they wont be loaded twice.
 #+begin_src cpp
 #include <map>
 #include <string>
 #include <unordered_map>
 #include <memory>
-namespace Assets{
-    // template<typename... AT> class _AssetManager;
+#include <cstddef>
+#include <functional>
 
-  template<typename T, typename... Tail> class _AssetHelper : public _AssetHelper<T>, public _AssetHelper<Tail...> {};
+namespace Assets {
 
-    template<typename T> class _AssetHelper<T> {
-      template<typename...>
-        friend class _AssetManager;
-        std::unordered_map<std::string, T> data;
+    class Asset;
+
+    inline std::size_t type_id_counter;
+    template<typename T> inline std::size_t type_id = type_id_counter++;
+
+    template<typename T>
+    struct _AssetInfo{
+        T asset;
+        std::size_t registered = 1;
+        std::size_t type = type_id<T>;
     };
-    template<typename... AT> class _AssetManager : public _AssetHelper<AT...> {
+
+    template<typename... AT> class _AssetManager {
+
+#+end_src
+
+*** Members
+Hashmaps holds pairs of Asset Data and bookkeeping
+#+name: AssetManager
+#+begin_src cpp
+           template<typename T>
+            static std::unordered_map<std::string, _AssetInfo<T>> data;
+#+end_src
+*** Functions
+**** =get_asset=
+- Arguments ::
+  String id of the Asset
+- Return Value ::
+  A =std::shared_ptr<T>= of the Asset
+  or a =nullptr= if the functions Fails
+
+#+begin_src cpp
     public:
         template<typename T>
-        std::shared_ptr<T> get_asset(const std::string id){
-            if(_AssetHelper<T>::data.contains(id))
-                return std::make_shared(_AssetHelper<T>::data[id]);
+        static std::shared_ptr<T> get_asset(const std::string id){
+            if(data<T>.contains(id))
+                return std::make_shared(data<T>[id]);
             else
               return nullptr;
         }
+#+end_src
+**** =register_asset=
+Register Asset and increment Counter
+If asset is registered on different data return false
+- =std::string= :: Asset ID
+  String
 
+#+begin_src cpp
+    template<typename T>
+    static bool register_asset(std::string &&id, T &&asset){
+        if(contains(id)) {
+            if(data<T>[id].asset != asset){
+                return false;
+            }
+            data<T>[id].registered++;
+        } else {
+            data<T>[id] = _AssetInfo {.asset = asset};
+        }
+        return true;
+    }
+#+end_src
+**** =unregister_asset=
+Decrement Register counter for Asset
+Delete Asset if registerd counter is =0=
+
+#+begin_src cpp
+    static bool unregister_asset(std::string &&id){
+        bool ret = false;
+        ([&]{
+            if(data<AT>.contains(id)){
+                if(!--data<AT>[id].registered){
+                    data<AT>.erase(id);
+                }
+                ret = true;
+            }
+        }(), ...);
+        return false;
+    }
+#+end_src
+**** =load_asset=
+Load Asset
+return successful?
+#+begin_src cpp
+    public:
         template<typename T>
-        bool load_asset(std::string &&id, const T &&asset){
-            // if(contains(id)) return false;
-            _AssetHelper<T>::data[id] = asset;
-            return true;
+        static bool load_asset(std::string &&id, const T &&asset){
+            if(!contains(id)) return false;
+            return (data<T>[id].asset.loaded = data<T>[id].asset.load());
         }
-        bool contains(std::string id)
-        {
-            return _contains<AT...>(id);
-        }
+#+end_src
 
-    private:
-        template<typename T1, typename T2, typename... Tail>
-        bool _contains(std::string id)
+**** =contains=
+#+begin_src cpp
+    public:
+        static bool contains(std::string id)
         {
-            if(Assets::_AssetHelper<T1>::data.contains(id)) return true;
-            return _contains<T2, Tail...>(id);
-        }
-        template<typename T> bool _contains(std::string id)
-        {
-            if(Assets::_AssetHelper<T>::data.contains(id)) return true;
-            else return false;
+            return (data<AT>.contains(id) || ...);
         }
 
     };
-    #define REGISTER_MANAGER(...) typedef Assets::_AssetManager<__VA_ARGS__> AssetManager;
-}
+#+end_src
+*** Member Definition
+#+begin_src cpp
+    template<typename... AT>
+    template<typename T>
+      std::unordered_map<std::string, _AssetInfo<T>> _AssetManager<AT...>::data;
 
+#+end_src
+*** REGISTER_MANAGER
+#+begin_src cpp
+#define REGISTER_MANAGER(...) typedef Assets::_AssetManager<__VA_ARGS__> AssetManager;
+} // Namespace Assets
 #+end_src
 
 
@@ -94,115 +148,51 @@ namespace Assets{
 
 using namespace Assets;
 
-IMPL_ASSET(AssetTexture){};
-IMPL_ASSET(AssetSound){};
-
-// REGISTER_MANAGER(AssetTexture, AssetSound)
+REGISTER_MANAGER(int, float)
 
 int main(void) {
-    _AssetManager<AssetTexture> manager;
-    manager.load_asset("Texture", AssetTexture{});
-}
-#+end_src
+    std::cout << AssetManager::contains("funny_num") << std::endl;
 
-#+RESULTS:
+    AssetManager::register_asset("funny_num", 69);
+    AssetManager::register_asset("funny_num", 69);
 
-** IMPL_ASSET
-The =IMPL_ASSET= Macro can be used to Implement an Asset Type and automatically assign it a unique id.
-All Assets registered to the Asset Manager must be implemented first
+    std::cout << AssetManager::contains("funny_num") << std::endl;
 
-It uses a counter variable template to generate Unique Ids for each Asset-Type
-#+name: MAKE_ASSET
-#+begin_src cpp
-
-namespace Assets {
-    inline std::size_t type_id_counter = 0;
-    template<typename T> inline std::size_t type_id = type_id_counter++;
-    template<typename T> class AssetId : public Asset{
-        public:
-        std::size_t get_type(){return type_id<T>;}
-    };
-
-    #define IMPL_ASSET(NAME) class NAME : public Assets::AssetId<NAME>
-}
-#+end_src
-
-*** KILL Register Macro
-Using templates to register a counter
-#+begin_src cpp :tangle no :eval yes
-#include <cstddef>
-#include <iostream>
-template<std::size_t N> class Manager{
-    public:
-    constexpr static std::size_t next(){return N;};
-};
-template<> class Manager<0> {
-    static constexpr std::size_t N = 0;
-    public:
-    constexpr static std::size_t next(){return N+1;};
-};
-
-#define NEXT(...) Manager<NEXT1()>::next()
-#define NEXT1(...) Manager<NEXT2()>::next()
-#define NEXT2(...) Manager<NEXT3()>::next()
-#define NEXT3(...) Manager<NEXT4()>::next()
-#define NEXT4(...) Manager<NEXT5()>::next()
-#define NEXT5(...) Manager<NEXT6()>::next()
-#define NEXT6(...) Manager<NEXT7()>::next()
-#define NEXT7(...) Manager<NEXT8()>::next()
-#define NEXT8(...) Manager<NEXT9()>::next()
-#define NEXT9(...) Manager<NEXT10()>::next()
-#define NEXT10(...) Manager<NEXT11()>::next()
-#define NEXT11(...) Manager<NEXT12()>::next()
-#define NEXT12(...) Manager<NEXT13()>::next()
-#define NEXT13(...) Manager<NEXT14()>::next()
-#define NEXT14(...) Manager<0>::next()
-
-#define INC template<> class Manager<NEXT()> { \
-    constexpr static std::size_t next(){return N+1;}; \
-};
-
-
-template<> class Manager<NEXT()> {
-    static constexpr std::size_t N = MEXT();
-    public:
-    constexpr static std::size_t next(){return N+1;};
-};
-template<> class Manager<Manager<1>::next()> {
-    static constexpr std::size_t N = Manager<1>::next();
-    public:
-    constexpr static std::size_t next(){return N+1;};
-};
-
-
-int main(){
-    std::cout << Manager<2>::next() << std::endl;
-}
-#+end_src
-
-#+RESULTS:
-
-*** Testing
-This Code Tests if the =MAKE_ASSET= Macro generates unique ids for each type
-#+begin_src cpp :tangle no :eval yes
-#include "Assets.h"
-#include <iostream>
-
-IMPL_ASSET(AssetTexture){};
-IMPL_ASSET(AssetSound){};
-
-int main(void) {
-    AssetTexture t;
-    AssetSound s;
-    AssetTexture t1;
-    std::cout << t.get_type() << std::endl;
-    std::cout << s.get_type() << std::endl;
-    std::cout << t1.get_type() << std::endl;
+    AssetManager::unregister_asset("funny_num");
+    std::cout << AssetManager::contains("funny_num") << std::endl;
+    AssetManager::unregister_asset("funny_num");
+    std::cout << AssetManager::contains("funny_num") << std::endl;
 }
 #+end_src
 
 #+RESULTS:
 : 0
 : 1
+: 1
 : 0
+
+** Asset
+It has a virtual function, which returns the Asset type.
+And keeps count of how often it is still registerd
+#+name: Asset
+#+begin_src cpp
+namespace Assets {
+    class Asset{
+        template<typename...>
+        friend class _AssetManager;
+
+        std::size_t registerd = 0;
+        bool loaded=false;
+
+        protected:
+        virtual bool load() = 0;
+        virtual void unload() = 0;
+        virtual bool operator!=(const Asset &rhs) = 0;
+
+        public:
+        virtual std::size_t get_type() = 0;
+    };
+}
+#+end_src
+
 ** Textures
