@@ -4,6 +4,7 @@
 #include <memory>
 #include <cstddef>
 #include <functional>
+#include <optional>
 
 namespace Assets {
 
@@ -26,11 +27,11 @@ namespace Assets {
 
     public:
         template<typename T>
-        static std::shared_ptr<T> get_asset(const std::string id){
+        static std::optional<std::reference_wrapper<const T>> get_asset(const std::string id){
             if(data<T>.contains(id))
-                return std::make_shared(data<T>[id]);
+                return std::ref(data<T>[id].asset);
             else
-              return nullptr;
+              return {};
         }
 
     template<typename T>
