@@ -1,149 +1,10 @@
-:PROPERTIES:
-:header-args: :main no :eval never :flags -I . :results output
-:END:
 #+title: Imtermiall2
 
-* Assets
-:PROPERTIES:
-:header-args+: :tangle Assets.h
-:END:
-An Asset is a generic type which hold every kind of Asset (Textures, Sounds, levels, scripts).
+* AssetManager
+- [[file:Imtermiall2_old.org][Initial]]
+- [[file:notes.org::*\[2023-12-13 Mi 16:54\] AssetManager][Thoughts]]
 
-
-All Assets get Stored in the =AssetManager=
-** Manager
-The Manager allows to iterate over all loaded assets, free them, display them ans so on.
-It has a static Member Hashmap for each Asset Type.
-
-Primarily for future GPU support, but also allows pre registering assets, so they wont be loaded twice.
-#+begin_src cpp
-#include <map>
-#include <string>
-#include <unordered_map>
-#include <memory>
-#include <cstddef>
-#include <functional>
-#include <optional>
-
-namespace Assets {
-
-    class Asset;
-
-    inline std::size_t type_id_counter;
-    template<typename T> inline std::size_t type_id = type_id_counter++;
-
-    template<typename T>
-    struct _AssetInfo{
-        T asset;
-        std::size_t registered = 1;
-        std::size_t type = type_id<T>;
-    };
-
-    template<typename... AT> class _AssetManager {
-
-#+end_src
-
-*** Members
-Hashmaps holds pairs of Asset Data and bookkeeping
-#+name: AssetManager
-#+begin_src cpp
-           template<typename T>
-            static std::unordered_map<std::string, _AssetInfo<T>> data;
-#+end_src
-*** Functions
-**** =get_asset=
-- Arguments ::
-  String id of the Asset
-- Return Value ::
-  A =std::shared_ptr<T>= of the Asset
-  or a =nullptr= if the functions Fails
-
-#+begin_src cpp
-    public:
-        template<typename T>
-        static std::optional<std::reference_wrapper<const T>> get_asset(const std::string id){
-            if(data<T>.contains(id))
-                return std::ref(data<T>[id].asset);
-            else
-              return {};
-        }
-#+end_src
-**** =register_asset=
-Register Asset and increment Counter
-If asset is registered on different data return false
-- =std::string= :: Asset ID
-  String
-
-#+begin_src cpp
-    template<typename T>
-    static bool register_asset(std::string &&id, T &&asset){
-        if(contains(id)) {
-            if(data<T>[id].asset != asset){
-                return false;
-            }
-            data<T>[id].registered++;
-        } else {
-            data<T>[id] = _AssetInfo {.asset = asset};
-        }
-        return true;
-    }
-#+end_src
-**** =unregister_asset=
-Decrement Register counter for Asset
-Delete Asset if registerd counter is =0=
-
-#+begin_src cpp
-    static bool unregister_asset(std::string &&id){
-        bool ret = false;
-        ([&]{
-            if(data<AT>.contains(id)){
-                if(!--data<AT>[id].registered){
-                    data<AT>.erase(id);
-                }
-                ret = true;
-            }
-        }(), ...);
-        return false;
-    }
-#+end_src
-**** =load_asset=
-Load Asset
-return successful?
-#+begin_src cpp
-    public:
-        template<typename T>
-        static bool load_asset(std::string &&id, const T &&asset){
-            if(!contains(id)) return false;
-            return (data<T>[id].asset.loaded = data<T>[id].asset.load());
-        }
-#+end_src
-
-**** =contains=
-#+begin_src cpp
-    public:
-        static bool contains(std::string id)
-        {
-            return (data<AT>.contains(id) || ...);
-        }
-
-    };
-#+end_src
-*** Member Definition
-#+begin_src cpp
-    template<typename... AT>
-    template<typename T>
-      std::unordered_map<std::string, _AssetInfo<T>> _AssetManager<AT...>::data;
-
-#+end_src
-*** REGISTER_MANAGER
-#+begin_src cpp
-#define REGISTER_MANAGER(...) typedef Assets::_AssetManager<__VA_ARGS__> AssetManager;
-} // Namespace Assets
-#+end_src
-
-
-*** Testing Manager
-#+begin_src cpp :tangle no :eval yes :flags -I . -std=c++23
+#+begin_src cpp :results output
 #include "Assets.h"
 #include <iostream>
 
@@ -152,7 +13,7 @@ using namespace Assets;
 REGISTER_MANAGER(int, float)
 
 int main(void) {
-    std::cout << "Is Asset loaded ? " << (AssetManager::contains("funny_num") ? "yes" : "no.") << std::endl;
+    std::cout << "Is Asset loaded? " << (AssetManager::contains("funny_num") ? "yes" : "no.") << std::endl;
     std::cout << "Register Asset! (69)" << std::endl;
 
     AssetManager::register_asset("funny_num", 69);
@@ -161,7 +22,7 @@ int main(void) {
 
     AssetManager::register_asset("funny_num", 69);
 
-    std::cout << "Is Asset loaded ? " << (AssetManager::contains("funny_num") ? "yes" : "no.") << std::endl;
+    std::cout << "Is Asset loaded? " << (AssetManager::contains("funny_num") ? "yes" : "no.") << std::endl;
     std::string the_asset = AssetManager::get_asset<int>("funny_num").transform([](auto a){return std::to_string(a);}).value_or("not present");
     std::cout << "The Asset: " << the_asset << std::endl;
 
@@ -169,12 +30,12 @@ int main(void) {
 
     AssetManager::unregister_asset("funny_num");
 
-    std::cout << "Is Asset loaded ? " << (AssetManager::contains("funny_num") ? "yes" : "no.") << std::endl;
+    std::cout << "Is Asset loaded? " << (AssetManager::contains("funny_num") ? "yes" : "no.") << std::endl;
     std::cout << "Unregister again!" << std::endl;
 
     AssetManager::unregister_asset("funny_num");
 
-    std::cout << "Is Asset loaded ? " << (AssetManager::contains("funny_num") ? "yes" : "no.") << std::endl;
+    std::cout << "Is Asset loaded? " << (AssetManager::contains("funny_num") ? "yes" : "no.") << std::endl;
     the_asset = AssetManager::get_asset<int>("funny_num").transform([](auto a){return std::to_string(a);}).value_or("not present");
     std::cout << "The Asset: " << the_asset << std::endl;
 }
@@ -182,40 +43,23 @@ int main(void) {
 
 #+RESULTS:
 #+begin_example
-Is Asset loaded ? no.
+Is Asset loaded? no.
 Register Asset! (69)
 Register Asset again!
-Is Asset loaded ? yes
+Is Asset loaded? yes
 The Asset: 69
 Unregister once!
-Is Asset loaded ? yes
+Is Asset loaded? yes
 Unregister again!
-Is Asset loaded ? no.
+Is Asset loaded? no.
 The Asset: not present
 #+end_example
 
-** Asset
-It has a virtual function, which returns the Asset type.
-And keeps count of how often it is still registerd
-#+name: Asset
-#+begin_src cpp
-namespace Assets {
-    class Asset{
-        template<typename...>
-        friend class _AssetManager;
+#+begin_src plantuml :file fuuck.svg
 
-        std::size_t registerd = 0;
-        bool loaded=false;
-
-        protected:
-        virtual bool load() = 0;
-        virtual void unload() = 0;
-        virtual bool operator!=(const Asset &rhs) = 0;
-
-        public:
-        virtual std::size_t get_type() = 0;
-    };
-}
+NVME -> TMP : Windows
+Arch -> NVME
 #+end_src
 
-** Textures
+#+RESULTS:
+[[file:fuuck.svg]]

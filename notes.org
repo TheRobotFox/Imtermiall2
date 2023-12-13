@@ -1,0 +1,36 @@
+* Inbox
+** [2023-12-13 Mi 16:54] AssetManager
+
+[[file:~/projects/imtermiall2/Assets.h]]
+*** Why?
+- Asset loading Abstraction
+- For Future Graphics Card support
+- Optimized loading
+*** What
+- =register_asset(id, asset)= ::
+  =id= is as string id for the Asset.
+  =asset= is a derivative of =Asset= with a load and unload function
+
+  will register an asset under id
+  the id can only be loaded with one asset.
+
+  all potencially laoded assets can be preregistered without being loaded immediately
+- =unregister_asset(id)= ::
+  makes sense to only allow a single Asset with a id
+  unregister decrements the counter and =unload= s the element, when no longer needed
+
+- =load()
+- =get_asset<T>(id)= ::
+  obtain reference to asset data
+** [2023-12-13 Mi 16:50] Premise
+
+The Game is a Programming Puzzle Game with a Raycaster and OS interaction
+
+Youre on a spaceship alone and have to get to the Bridge, but the Systems are broken and you have to programm your way through
+** [2023-12-13 Mi 16:43] No more Literate Programming
+
+At least this way of literate Programming does not work for me in this case.
+
+I will try it again some other time, but for now its slowing me down too much, i don' have a lot of time :(
+
+Instead i'm gonna try to plan all the modules in org mode and then write tests, but the code will still be done the traditional route, since i miss lsp and don't want to retangle every time i test.

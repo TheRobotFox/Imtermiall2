@@ -36,7 +36,7 @@ namespace Assets {
 
     template<typename T>
     static bool register_asset(std::string &&id, T &&asset){
-        if(contains(id)) {
+        if(data<T>.contains(id)) {
             if(data<T>[id].asset != asset){
                 return false;
             }
